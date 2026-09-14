@@ -1,10 +1,11 @@
 """Fuentes de precio para el paper trading engine.
 
 `LiveBinanceFeed` es la fuente real: sondea el endpoint público de klines de
-Binance (no requiere API key porque solo lee datos de mercado). Necesita que
-el proceso que la ejecute tenga salida a internet hacia api.binance.com — por
-eso el paper trading está pensado para correr en Railway o en el PC del
-usuario, no dentro de este sandbox (que tiene el egress restringido).
+Binance (no requiere API key porque solo lee datos de mercado). Usa
+data-api.binance.vision (el espejo público de solo-lectura de Binance) en
+lugar de api.binance.com, porque este último devuelve HTTP 451 (bloqueo
+geográfico) desde datacenters en EE.UU. como los de Render — el espejo
+existe precisamente para evitar ese bloqueo regional sin necesitar API key.
 
 `ReplayFeed` reproduce un CSV histórico como si fuera un stream en vivo —
 sirve para probar el engine end-to-end sin depender de la red.
@@ -36,7 +37,12 @@ class LiveBinanceFeed(PriceFeed):
     async def stream(self):
         import aiohttp
 
-        url = "https://api.binance.com/api/v3/klines"
+        # NOTA: api.binance.com devuelve HTTP 451 (bloqueo geográfico) desde
+        # datacenters en EE.UU. como los de Render (Oregon). Usamos el espejo
+        # público de datos de mercado de Binance (data-api.binance.vision),
+        # pensado exactamente para este caso: solo lectura, sin API key,
+        # sin el bloqueo regional del dominio principal.
+        url = "https://data-api.binance.vision/api/v3/klines"
         params = {"symbol": self.symbol, "interval": self.interval, "limit": 2}
         async with aiohttp.ClientSession() as session:
             while True:
