@@ -24,8 +24,8 @@ from gridbot.paper.feeds import LiveBinanceFeed
 
 DB_PATH = "sqlite:///gridbot.db"
 
-_engines: dict[str, PaperTradingEngine] = {}
-_tasks: list[asyncio.Task] = []
+_engines = {}
+_tasks = []
 
 
 @asynccontextmanager
@@ -56,14 +56,42 @@ app = FastAPI(title="Grid Trading Bot Dashboard", lifespan=lifespan)
 def status():
     db = get_session(DB_PATH)
     out = []
+    total_equity = 0.0
+    total_invested = 0.0
     for symbol, engine in _engines.items():
         sim = engine.sim
+        realized_pnl = None
+        equity = None
+        roi_pct = None
+        n_fills = 0
+        if sim is not None:
+            realized_pnl = (
+                db.query(PaperFill)
+                .filter(PaperFill.session_id == engine.session_id, PaperFill.pnl.isnot(None))
+                .with_entities(PaperFill.pnl)
+                .all()
+            )
+            realized_pnl = sum(p[0] for p in realized_pnl) if realized_pnl else 0.0
+            n_fills = (
+                db.query(PaperFill).filter(PaperFill.session_id == engine.session_id).count()
+            )
+            mark_price = engine.last_price if engine.last_price is not None else sim.slots[0].lower
+            equity = sim.equity(mark_price)
+            roi_pct = (equity - engine.config.total_investment) / engine.config.total_investment * 100
+            total_equity += equity
+            total_invested += engine.config.total_investment
+
         row = {
             "symbol": symbol,
             "started": sim is not None,
             "stopped_out": sim.stopped_out if sim else False,
             "stop_reason": sim.stop_reason if sim else None,
             "quote_balance": round(sim.quote_balance, 4) if sim else None,
+            "last_price": engine.last_price,
+            "equity": round(equity, 4) if equity is not None else None,
+            "realized_pnl_quote": round(realized_pnl, 4) if realized_pnl is not None else None,
+            "roi_pct": round(roi_pct, 3) if roi_pct is not None else None,
+            "n_fills": n_fills,
             "config": {
                 "lower": engine.config.lower,
                 "upper": engine.config.upper,
@@ -74,7 +102,19 @@ def status():
         }
         out.append(row)
     db.close()
-    return {"bots": out, "server_time": dt.datetime.utcnow().isoformat()}
+
+    portfolio_roi_pct = (
+        round((total_equity - total_invested) / total_invested * 100, 3) if total_invested else None
+    )
+    return {
+        "bots": out,
+        "portfolio": {
+            "total_equity": round(total_equity, 2) if total_invested else None,
+            "total_invested": round(total_invested, 2) if total_invested else None,
+            "roi_pct": portfolio_roi_pct,
+        },
+        "server_time": dt.datetime.utcnow().isoformat(),
+    }
 
 
 @app.get("/api/trades/{symbol}")
@@ -136,17 +176,41 @@ _HTML = """
 <body>
   <h1>Grid Trading Bot — Paper Trading</h1>
   <div class="sub">Sin dinero real. Datos en vivo de Binance. Se actualiza cada 10s.</div>
+  <div id="portfolio"></div>
   <div id="root"></div>
 <script>
+function roiClass(v) {
+  if (v === null || v === undefined) return '';
+  return v >= 0 ? 'ok' : 'bad';
+}
+function fmtRoi(v) {
+  if (v === null || v === undefined) return '—';
+  return (v >= 0 ? '+' : '') + v.toFixed(3) + '%';
+}
 async function refresh() {
   const res = await fetch('/api/status');
   const data = await res.json();
+  const p = data.portfolio || {};
+  const portfolioEl = document.getElementById('portfolio');
+  if (p.total_invested) {
+    portfolioEl.innerHTML = `
+      <div class="card">
+        <h3>Portfolio total</h3>
+        <div>Invertido: ${p.total_invested} | Equity actual: ${p.total_equity}</div>
+        <div>ROI agregado: <span class="${roiClass(p.roi_pct)}">${fmtRoi(p.roi_pct)}</span></div>
+        <div class="sub">ROI &gt; 0% = rentable ahora mismo (a precio de mercado, incluye inventario aún no vendido). Con muestra pequeña (pocos días) esto es orientativo, no concluyente — sección 29 del sistema.</div>
+      </div>`;
+  } else {
+    portfolioEl.innerHTML = '';
+  }
   const root = document.getElementById('root');
   root.innerHTML = data.bots.map(b => `
     <div class="card">
       <h3>${b.symbol} ${b.stopped_out ? '<span class="bad">DETENIDO</span>' : '<span class="ok">activo</span>'}</h3>
       <div>Rango: ${b.config.lower.toFixed(4)} - ${b.config.upper.toFixed(4)} | Grids: ${b.config.num_grids} | Inversión: ${b.config.total_investment}</div>
-      <div>Balance en quote: ${b.quote_balance ?? '—'}</div>
+      <div>Precio actual: ${b.last_price ?? '—'} | Balance en quote: ${b.quote_balance ?? '—'}</div>
+      <div>Equity: ${b.equity ?? '—'} | ROI: <span class="${roiClass(b.roi_pct)}">${fmtRoi(b.roi_pct)}</span></div>
+      <div>PnL realizado (ventas cerradas): ${b.realized_pnl_quote ?? '—'} | Fills totales: ${b.n_fills ?? 0}</div>
       ${b.stop_reason ? `<div class="bad">${b.stop_reason}</div>` : ''}
     </div>
   `).join('') || '<p>No hay bots configurados. Genera configs.json con scripts/generate_live_configs.py</p>';
