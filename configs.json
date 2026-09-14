@@ -1,0 +1,46 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "lower": 75429.38249999999,
+    "upper": 80095.11750000001,
+    "num_grids": 17,
+    "total_investment": 1500.0,
+    "mode": "geometric",
+    "fee_rate": 0.001,
+    "stop_loss_pct": 0.15,
+    "take_profit_price": null
+  },
+  {
+    "symbol": "ETHUSDT",
+    "lower": 2448.668,
+    "upper": 2600.132,
+    "num_grids": 17,
+    "total_investment": 1500.0,
+    "mode": "geometric",
+    "fee_rate": 0.001,
+    "stop_loss_pct": 0.15,
+    "take_profit_price": null
+  },
+  {
+    "symbol": "BNBUSDT",
+    "lower": 703.2306,
+    "upper": 746.7294,
+    "num_grids": 17,
+    "total_investment": 1500.0,
+    "mode": "geometric",
+    "fee_rate": 0.001,
+    "stop_loss_pct": 0.15,
+    "take_profit_price": null
+  },
+  {
+    "symbol": "SOLUSDT",
+    "lower": 98.5326,
+    "upper": 104.6274,
+    "num_grids": 17,
+    "total_investment": 1500.0,
+    "mode": "geometric",
+    "fee_rate": 0.001,
+    "stop_loss_pct": 0.15,
+    "take_profit_price": null
+  }
+]
