@@ -24,6 +24,7 @@ class PaperTradingEngine:
         self.db_path = db_path
         self.sim: GridSimulator | None = None
         self.session_id: int | None = None
+        self.last_price: float | None = None
 
     def _persist_session_start(self, current_price: float) -> None:
         import dataclasses
@@ -76,6 +77,7 @@ class PaperTradingEngine:
                 pnl_txt = f" pnl={f.pnl:+.4f}" if f.pnl is not None else ""
                 print(f"[paper][{self.config.symbol}] {tag} @ {f.price:.4f} qty={f.qty:.6f}{pnl_txt}")
 
+            self.last_price = c
             equity = self.sim.equity(c)
             print(f"[paper][{self.config.symbol}] {ts} close={c:.4f} equity={equity:.2f}")
 
