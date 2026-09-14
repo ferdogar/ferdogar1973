@@ -1,0 +1,1 @@
+"""Submódulo de persistencia (SQLAlchemy)."""
