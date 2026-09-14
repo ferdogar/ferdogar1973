@@ -22,9 +22,9 @@ class PaperTradingEngine:
         self.config = config
         self.feed = feed
         self.db_path = db_path
-        self.sim: GridSimulator | None = None
-        self.session_id: int | None = None
-        self.last_price: float | None = None
+        self.sim = None
+        self.session_id = None
+        self.last_price = None
 
     def _persist_session_start(self, current_price: float) -> None:
         import dataclasses
@@ -63,7 +63,7 @@ class PaperTradingEngine:
         db.commit()
         db.close()
 
-    async def run(self, max_bars: int | None = None):
+    async def run(self, max_bars=None):
         n = 0
         async for ts, o, h, l, c in self.feed.stream():
             if self.sim is None:
@@ -132,8 +132,6 @@ async def _main_cli():
         )
         feed = ReplayFeed(df.iloc[len(df) // 2 :], speed=0.0)
     else:
-        # en modo live no tenemos histórico a mano en este proceso; se asume que
-        # el rango se calibró antes (p.ej. con run_backtest.py) y se pasa por config
         raise SystemExit(
             "Modo live: calibra antes el rango con scripts/run_backtest.py y arranca "
             "el paper trading en el servidor de despliegue (Railway/PC), donde sí hay "
